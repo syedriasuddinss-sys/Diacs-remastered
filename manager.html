@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CertChain — Analytics & Logs</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-brand" style="display:flex;align-items:center;gap:6px">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4" stroke="#34d399" stroke-width="3"/></svg>
+    DIACS Validator
+  </span>
+  <span class="chain-badge">Sepolia Testnet</span>
+  <div class="nav-links">
+    <a href="index.html" class="nav-link">Diacs Control <span style="color:var(--green);font-size:1.1em;vertical-align:middle">✓</span></a>
+    <a href="college.html" class="nav-link">College Control</a>
+    <a href="manager.html" class="nav-link active">Analytics & Logs</a>
+    <a href="public.html" class="nav-link">Public Verifier <span style="color:var(--green);font-size:1.1em;vertical-align:middle">✓</span></a>
+  </div>
+  <div class="theme-switch" id="themeSwitch">
+    <button class="theme-btn" data-theme="dark" title="Dark Mode">🌙</button>
+    <button class="theme-btn" data-theme="light" title="Light Mode">☀️</button>
+    <button class="theme-btn" data-theme="transparent" title="Transparent Mode">💧</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+  <div class="page-header">
+    <div class="logo-badge">Manager Dashboard</div>
+    <h1>Events &amp; Controls</h1>
+    <p>Monitor blockchain events in real-time, revoke certificates, and transfer ownership.</p>
+  </div>
+
+  <!-- Wallet Bar -->
+  <div class="wallet-bar">
+    <button id="connectBtn" class="btn btn-primary btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+      Connect
+    </button>
+    <span id="walletLabel" class="wallet-status mono"></span>
+    <span id="ownerLabel" class="role-badge"></span>
+  </div>
+
+  <!-- Analytics & Logs -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <div class="icon icon-violet">📊</div>
+      <div><h2>Analytics & Cost Tracking</h2><p>View total certificates issued and calculate total Sepolia ETH spent (~0.00024429 ETH per issue).</p></div>
+    </div>
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="stat-card">
+        <div class="stat-label">Total Issued</div>
+        <div class="stat-value" id="totalIssuedStat">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total ETH Spent</div>
+        <div class="stat-value" id="totalEthStat" style="font-size:1.4rem">0.00000000 ETH</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:0 4px">
+      <h3 style="font-size:0.85rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em">Cost Analysis Chart</h3>
+      <select id="chartTypeSelect" class="input" style="width:auto;padding:6px 32px 6px 12px;font-size:0.8rem;background-position:right 8px center">
+        <option value="bar">Bar Chart</option>
+        <option value="line">Line Chart</option>
+        <option value="doughnut">Doughnut Chart</option>
+        <option value="pie">Pie Chart</option>
+      </select>
+    </div>
+    <div style="position:relative;height:300px;width:100%;border-radius:12px;padding:16px;border:1px solid var(--border);background:rgba(0,0,0,0.1)">
+      <canvas id="analyticsChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Event Controls -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <div class="icon icon-blue">◎</div>
+      <div><h2>Event Monitor</h2><p>View on-chain certificate history or listen live.</p></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      <button id="loadHistory" class="btn btn-primary">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+        Load History
+      </button>
+      <button id="listenEvents" class="btn btn-success">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+        Listen Live
+      </button>
+      <button id="stopListen" class="btn btn-ghost">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        Stop
+      </button>
+    </div>
+
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Certificate ID</th>
+            <th>IPFS / Info</th>
+            <th>Transaction</th>
+            <th>Block Time</th>
+          </tr>
+        </thead>
+        <tbody id="eventsTable">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:28px">No events loaded. Click "Load History".</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="grid-2">
+    <!-- Revoke -->
+    <div class="card">
+      <div class="card-header">
+        <div class="icon icon-red">✕</div>
+        <div><h2>Revoke Certificate</h2><p>Owner wallet required.</p></div>
+      </div>
+      <div class="form-group">
+        <label class="field-label">Certificate ID</label>
+        <input id="revokeId" type="text" placeholder="Certificate ID to revoke" />
+      </div>
+      <button id="revokeBtn" class="btn btn-danger btn-full btn-lg">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        Revoke Certificate
+      </button>
+    </div>
+
+    <!-- Transfer Ownership -->
+    <div class="card">
+      <div class="card-header">
+        <div class="icon icon-yellow">⇄</div>
+        <div><h2>Transfer Ownership</h2><p>Change the contract manager.</p></div>
+      </div>
+      <div class="form-group">
+        <label class="field-label">New Owner Address</label>
+        <input id="newOwner" type="text" placeholder="0x..." class="mono" />
+      </div>
+      <button id="transferBtn" class="btn btn-warning btn-full btn-lg">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        Transfer Ownership
+      </button>
+      <p style="font-size:0.76rem;color:var(--text-muted);margin-top:10px">Transfers the right to issue/revoke to the new address.</p>
+    </div>
+  </div>
+
+  <div id="mgrMsg" class="msg-area" style="margin-top:16px">
+    <span style="color:var(--text-muted)">Action results will appear here.</span>
+  </div>
+</div>
+
+<script>
+  const contractAddress = "0xCEE8399631DEd9E4632Db6D4E8BA9bA499076e46";
+  const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"},{"indexed":true,"internalType":"address","name":"issuer","type":"address"}],"name":"CertificateIssued","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":true,"internalType":"address","name":"revoker","type":"address"}],"name":"CertificateRevoked","type":"event"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"},{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"issueCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"revokeCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"verifyCertificate","outputs":[{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"}];
+
+  const $ = id => document.getElementById(id);
+  let provider = null, signer = null, contract = null, listening = false;
+
+  function toBytes32(s) { return ethers.utils.formatBytes32String(s); }
+  function decodeBytes32(b) { try { return ethers.utils.parseBytes32String(b); } catch(e) { return b; } }
+  function setMsg(html, type='info') { const m=$('mgrMsg'); m.className=`msg-area ${type}`; m.innerHTML=html; }
+  function showSpinner(btn, t) { btn.disabled=true; btn.innerHTML=`<span class="spinner"></span> ${t}`; }
+  function hideSpinner(btn, t) { btn.disabled=false; btn.innerHTML=t; }
+
+  async function switchToSepolia() {
+    try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:"0xaa36a7"}] }); }
+    catch(e) { if(e.code===4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{chainId:"0xaa36a7",chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:["https://rpc.sepolia.org"],blockExplorerUrls:["https://sepolia.etherscan.io"]}] }); }
+  }
+
+  async function showOwner() {
+    try {
+      const p = provider || ethers.getDefaultProvider('sepolia');
+      const c = new ethers.Contract(contractAddress, contractABI, p);
+      const owner = await c.owner();
+      const ol = $('ownerLabel');
+      if (signer) {
+        const addr = await signer.getAddress();
+        if (owner.toLowerCase() === addr.toLowerCase()) { ol.className='role-badge owner'; ol.textContent='◆ Owner'; return; }
+      }
+      ol.className='role-badge user'; ol.textContent='◇ Viewer';
+    } catch(e){}
+  }
+
+  async function connectWallet() {
+    if (!window.ethereum) { $('walletLabel').textContent = "No wallet"; return; }
+    provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+    try {
+      await provider.send("eth_requestAccounts", []);
+      await switchToSepolia();
+      signer = provider.getSigner();
+      const addr = await signer.getAddress();
+      $('walletLabel').textContent = `${addr.substring(0,6)}...${addr.slice(-4)}`;
+      contract = new ethers.Contract(contractAddress, contractABI, signer);
+      await showOwner();
+    } catch(e) { $('walletLabel').textContent = "Connection failed"; }
+  }
+
+  $('connectBtn').addEventListener('click', connectWallet);
+  window.addEventListener('load', async () => { if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} } });
+
+  $('loadHistory').addEventListener('click', async () => {
+    const tb = $('eventsTable');
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:28px"><span class="spinner" style="border-top-color:var(--accent)"></span></td></tr>';
+    try {
+      const p = provider || ethers.getDefaultProvider('sepolia');
+      const iface = new ethers.utils.Interface(contractABI);
+      const issuedTopic = iface.getEventTopic('CertificateIssued');
+      const revokedTopic = iface.getEventTopic('CertificateRevoked');
+      const current = await p.getBlockNumber();
+      const from = Math.max(0, current - 20000);
+      const logs = await p.getLogs({ address: contractAddress, fromBlock: from, toBlock: current, topics: [[issuedTopic, revokedTopic]] });
+      if (!logs.length) { tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:28px">No events found in range.</td></tr>'; return; }
+      const parsed = await Promise.all(logs.map(async (l) => {
+        const pl = iface.parseLog(l);
+        const blk = await p.getBlock(l.blockNumber);
+        return { parsed: pl, txHash: l.transactionHash, blockTime: new Date(blk.timestamp*1000).toLocaleString(), blockNumber: l.blockNumber };
+      }));
+      
+      const issuedEvents = parsed.filter(i => i.parsed.name === 'CertificateIssued');
+      const totalIssued = issuedEvents.length;
+      $('totalIssuedStat').textContent = totalIssued;
+      $('totalEthStat').textContent = (totalIssued * 0.00024429).toFixed(8) + ' ETH';
+      
+      const chartData = issuedEvents.map(item => ({
+        certId: decodeBytes32(item.parsed.args.certificateId),
+        blockNumber: item.blockNumber
+      }));
+      renderChart(chartData);
+
+      parsed.sort((a,b) => b.blockNumber - a.blockNumber);
+      tb.innerHTML = '';
+      parsed.forEach(item => {
+        if (item.parsed.name === 'CertificateIssued') {
+          const certId = decodeBytes32(item.parsed.args.certificateId);
+          const ipfs = item.parsed.args.ipfsHash;
+          const issuer = item.parsed.args.issuer;
+          tb.innerHTML += `<tr>
+            <td><span class="badge badge-green">Issued</span></td>
+            <td class="mono" style="font-size:0.8em">${certId}</td>
+            <td><a class="tx-link" target="_blank" href="https://gateway.pinata.cloud/ipfs/${ipfs}">${ipfs.substring(0,18)}…</a></td>
+            <td><a class="tx-link" target="_blank" href="https://sepolia.etherscan.io/tx/${item.txHash}">${item.txHash.substring(0,10)}…</a><br><span style="font-size:0.72em;color:var(--text-muted)">${issuer.substring(0,10)}…</span></td>
+            <td style="white-space:nowrap;font-size:0.78em">${item.blockTime}</td>
+          </tr>`;
+        } else if (item.parsed.name === 'CertificateRevoked') {
+          const certId = decodeBytes32(item.parsed.args.certificateId);
+          const revoker = item.parsed.args.revoker;
+          tb.innerHTML += `<tr>
+            <td><span class="badge badge-red">Revoked</span></td>
+            <td class="mono" style="font-size:0.8em">${certId}</td>
+            <td style="color:var(--text-muted)">—</td>
+            <td><a class="tx-link" target="_blank" href="https://sepolia.etherscan.io/tx/${item.txHash}">${item.txHash.substring(0,10)}…</a><br><span style="font-size:0.72em;color:var(--text-muted)">${revoker.substring(0,10)}…</span></td>
+            <td style="white-space:nowrap;font-size:0.78em">${item.blockTime}</td>
+          </tr>`;
+        }
+      });
+    } catch(err) { $('eventsTable').innerHTML = `<tr><td colspan="5" style="color:var(--red);padding:20px">${err.message}</td></tr>`; }
+  });
+
+  $('listenEvents').addEventListener('click', async () => {
+    if (!provider) provider = ethers.getDefaultProvider('sepolia');
+    if (listening) return;
+    listening = true;
+    const iface = new ethers.utils.Interface(contractABI);
+    const issuedFilter = { address: contractAddress, topics: [iface.getEventTopic('CertificateIssued')] };
+    const revokedFilter = { address: contractAddress, topics: [iface.getEventTopic('CertificateRevoked')] };
+    provider.on(issuedFilter, async (log) => {
+      const parsed = iface.parseLog(log);
+      const certId = decodeBytes32(parsed.args.certificateId);
+      const ipfs = parsed.args.ipfsHash;
+      const issuer = parsed.args.issuer;
+      const blk = await provider.getBlock(log.blockNumber);
+      const time = new Date(blk.timestamp*1000).toLocaleString();
+      $('eventsTable').insertAdjacentHTML('afterbegin', `<tr style="animation:popIn 0.3s ease">
+        <td><span class="badge badge-green">Issued ●</span></td>
+        <td class="mono" style="font-size:0.8em">${certId}</td>
+        <td><a class="tx-link" target="_blank" href="https://gateway.pinata.cloud/ipfs/${ipfs}">${ipfs.substring(0,18)}…</a></td>
+        <td><a class="tx-link" target="_blank" href="https://sepolia.etherscan.io/tx/${log.transactionHash}">${log.transactionHash.substring(0,10)}…</a></td>
+        <td style="white-space:nowrap;font-size:0.78em">${time}</td>
+      </tr>`);
+    });
+    provider.on(revokedFilter, async (log) => {
+      const parsed = iface.parseLog(log);
+      const certId = decodeBytes32(parsed.args.certificateId);
+      const blk = await provider.getBlock(log.blockNumber);
+      const time = new Date(blk.timestamp*1000).toLocaleString();
+      $('eventsTable').insertAdjacentHTML('afterbegin', `<tr style="animation:popIn 0.3s ease">
+        <td><span class="badge badge-red">Revoked ●</span></td>
+        <td class="mono" style="font-size:0.8em">${certId}</td>
+        <td style="color:var(--text-muted)">—</td>
+        <td><a class="tx-link" target="_blank" href="https://sepolia.etherscan.io/tx/${log.transactionHash}">${log.transactionHash.substring(0,10)}…</a></td>
+        <td style="white-space:nowrap;font-size:0.78em">${time}</td>
+      </tr>`);
+    });
+    $('listenEvents').disabled = true;
+  });
+
+  $('stopListen').addEventListener('click', () => {
+    if (!provider) return;
+    provider.removeAllListeners();
+    listening = false;
+    $('listenEvents').disabled = false;
+  });
+
+  $('revokeBtn').addEventListener('click', async () => {
+    const id = $('revokeId').value.trim();
+    if (!id) return alert("Enter Certificate ID.");
+    if (!contract) return alert("Connect wallet.");
+    showSpinner($('revokeBtn'), 'Revoking…');
+    try {
+      const tx = await contract.revokeCertificate(toBytes32(id));
+      setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View ↗</a>`, 'info');
+      await tx.wait();
+      setMsg(`Certificate <strong>${id}</strong> revoked.`, 'success');
+      $('revokeId').value = '';
+    } catch(err) { setMsg(`Revoke failed: ${err.reason||err.message}`, 'error'); }
+    finally { hideSpinner($('revokeBtn'), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Revoke Certificate'); }
+  });
+
+  $('transferBtn').addEventListener('click', async () => {
+    const addr = $('newOwner').value.trim();
+    if (!ethers.utils.isAddress(addr)) return alert("Invalid address.");
+    if (!contract) return alert("Connect wallet.");
+    showSpinner($('transferBtn'), 'Transferring…');
+    try {
+      const tx = await contract.transferOwnership(addr);
+      setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View ↗</a>`, 'info');
+      await tx.wait();
+      setMsg(`Ownership transferred to <span class="mono">${addr}</span>`, 'success');
+      $('newOwner').value = '';
+      await showOwner();
+    } catch(err) { setMsg(`Transfer failed: ${err.reason||err.message}`, 'error'); }
+    finally { hideSpinner($('transferBtn'), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg> Transfer Ownership'); }
+  });
+
+  // Chart logic
+  let chartInstance = null;
+  let currentChartData = [];
+  const ethCostPerCert = 0.00024429;
+  let currentChartType = 'bar';
+
+  function renderChart(data) {
+    currentChartData = data;
+    const ctx = document.getElementById('analyticsChart').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+    
+    if(!data || data.length === 0) return;
+
+    data.sort((a,b) => a.blockNumber - b.blockNumber);
+    const labels = data.map(d => d.certId.substring(0,8) + '...');
+    const costs = data.map((d, i) => (i + 1) * ethCostPerCert);
+
+    let bgColors = 'rgba(99, 179, 255, 0.4)';
+    let borderColors = 'rgba(99, 179, 255, 1)';
+    
+    if (currentChartType === 'doughnut' || currentChartType === 'pie') {
+      bgColors = costs.map((_, i) => `hsla(${(i * 360) / costs.length}, 70%, 60%, 0.6)`);
+      borderColors = costs.map((_, i) => `hsla(${(i * 360) / costs.length}, 70%, 60%, 1)`);
+    }
+
+    chartInstance = new Chart(ctx, {
+      type: currentChartType,
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Cumulative Cost (ETH)',
+          data: costs,
+          backgroundColor: bgColors,
+          borderColor: borderColors,
+          borderWidth: 1,
+          borderRadius: currentChartType === 'bar' ? 4 : 0,
+          fill: currentChartType === 'line' ? true : false,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        maxBarThickness: 60,
+        scales: (currentChartType === 'bar' || currentChartType === 'line') ? {
+          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+          x: { grid: { display: false } }
+        } : { x: { display: false }, y: { display: false } },
+        plugins: {
+          legend: { 
+            display: true,
+            position: 'bottom',
+            labels: { color: '#8fa3bf', font: { size: 11 } }
+          }
+        }
+      }
+    });
+  }
+
+  document.getElementById('chartTypeSelect').addEventListener('change', (e) => {
+    currentChartType = e.target.value;
+    if (currentChartData.length > 0) renderChart(currentChartData);
+  });
+
+  // Theme Switcher Logic
+  const savedTheme = localStorage.getItem('diacsTheme') || 'dark';
+  if (savedTheme !== 'dark') document.body.setAttribute('data-theme', savedTheme);
+  const themeBtns = document.querySelectorAll('.theme-btn');
+  themeBtns.forEach(btn => {
+    if(btn.dataset.theme === savedTheme) btn.classList.add('active');
+    else btn.classList.remove('active');
+    
+    btn.addEventListener('click', () => {
+      themeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (btn.dataset.theme === 'dark') document.body.removeAttribute('data-theme');
+      else document.body.setAttribute('data-theme', btn.dataset.theme);
+      localStorage.setItem('diacsTheme', btn.dataset.theme);
+    });
+  });
+</script>
+</body>
+</html>

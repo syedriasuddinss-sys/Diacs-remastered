@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CertChain — Certificate Verification System</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-brand" style="display:flex;align-items:center;gap:6px">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4" stroke="#34d399" stroke-width="3"/></svg>
+    DIACS Validator
+  </span>
+  <span class="chain-badge">Sepolia Testnet</span>
+  <div class="nav-links">
+    <a href="index.html" class="nav-link active">Diacs Control <span style="color:var(--green);font-size:1.1em;vertical-align:middle">✓</span></a>
+    <a href="college.html" class="nav-link">College Control</a>
+    <a href="manager.html" class="nav-link">Analytics & Logs</a>
+    <a href="public.html" class="nav-link">Public Verifier <span style="color:var(--green);font-size:1.1em;vertical-align:middle">✓</span></a>
+  </div>
+  <div class="theme-switch" id="themeSwitch">
+    <button class="theme-btn" data-theme="dark" title="Dark Mode">🌙</button>
+    <button class="theme-btn" data-theme="light" title="Light Mode">☀️</button>
+    <button class="theme-btn" data-theme="transparent" title="Transparent Mode">💧</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="logo-badge">Ethereum &amp; IPFS Powered</div>
+    <h1>Certificate Verification System</h1>
+    <p>Tamper-proof academic credentials anchored on the Sepolia blockchain.</p>
+  </div>
+
+  <!-- Wallet Bar -->
+  <div class="wallet-bar">
+    <button id="connectButton" class="btn btn-primary btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+      Connect Wallet
+    </button>
+    <span id="walletStatus" class="wallet-status mono"></span>
+    <span id="roleStatus" class="role-badge"></span>
+  </div>
+
+  <!-- Concept of Work -->
+  <div class="card" style="margin-bottom:20px;animation-delay:0.05s">
+    <div class="card-header">
+      <div class="icon icon-violet">★</div>
+      <div>
+        <h2>Concept of Work & Application Use</h2>
+        <p>How this process empowers worldwide verifiers with lasting trust.</p>
+      </div>
+    </div>
+    <div style="color:var(--text-secondary);font-size:0.9rem;line-height:1.7">
+      <p style="margin-bottom:12px;display:flex;align-items:center;flex-wrap:wrap">
+        <span><strong>1. Blockchain Issuance:</strong> The college issues certificates on the Ethereum Sepolia blockchain with a cryptographically secure Unique ID for each record.</span>
+        <a href="https://www.google.com/search?q=How+are+certificates+issued+on+the+Ethereum+blockchain" target="_blank" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:0.75rem;margin-left:8px;border-radius:4px">Learn More ↗</a>
+      </p>
+      <p style="margin-bottom:12px;display:flex;align-items:center;flex-wrap:wrap">
+        <span><strong>2. Decentralized Storage:</strong> Metadata and documents are stored on IPFS, ensuring they are tamper-proof, immutable, and exist permanently.</span>
+        <a href="https://www.google.com/search?q=What+is+IPFS+decentralized+storage+for+certificates" target="_blank" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:0.75rem;margin-left:8px;border-radius:4px">Learn More ↗</a>
+      </p>
+      <p style="display:flex;align-items:center;flex-wrap:wrap">
+        <span><strong>3. Instant Verification:</strong> Enter the Certificate ID to ensure it's valid. A <span style="color:var(--green);font-weight:bold">✓ Certificate Verified</span> badge proves authenticity without third-party reliance.</span>
+        <a href="https://www.google.com/search?q=Smart+contract+certificate+verification+process" target="_blank" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:0.75rem;margin-left:8px;border-radius:4px">Learn More ↗</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- Verify Card -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <div class="icon icon-blue">🔍</div>
+      <div>
+        <h2>Verify a Certificate</h2>
+        <p>Anyone can verify authenticity — no wallet required.</p>
+      </div>
+    </div>
+
+    <form id="verifyForm">
+      <div class="form-group">
+        <label class="field-label">Certificate ID</label>
+        <input type="text" id="certificateIdVerify" placeholder="e.g. CERT-2025-001" required />
+      </div>
+      <button id="verifyButton" type="submit" class="btn btn-primary btn-full btn-lg" style="margin-top:8px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+        Verify Certificate
+      </button>
+    </form>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel" style="display:none">
+    <div class="section-divider">Admin Controls — Owner Only</div>
+
+    <div class="grid-2" style="margin-bottom:20px">
+      <!-- Issue -->
+      <div class="card">
+        <div class="card-header">
+          <div class="icon icon-green">✦</div>
+          <div><h2>Issue Certificate</h2><p>Mint a new credential on-chain.</p></div>
+        </div>
+        <form id="issueForm">
+          <div class="form-group">
+            <label class="field-label">Certificate ID</label>
+            <input type="text" id="certificateIdIssue" placeholder="Unique Certificate ID" required />
+          </div>
+          <div class="form-group">
+            <label class="field-label">IPFS Hash (CID)</label>
+            <input type="text" id="ipfsHashIssue" placeholder="Paste CID from Pinata" required />
+          </div>
+          <button id="issueButton" type="submit" class="btn btn-success btn-full" style="margin-top:4px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            Issue Certificate
+          </button>
+        </form>
+      </div>
+
+      <!-- Revoke -->
+      <div class="card">
+        <div class="card-header">
+          <div class="icon icon-red">✕</div>
+          <div><h2>Revoke Certificate</h2><p>Permanently invalidate a credential.</p></div>
+        </div>
+        <form id="revokeForm">
+          <div class="form-group">
+            <label class="field-label">Certificate ID to Revoke</label>
+            <input type="text" id="certificateIdRevoke" placeholder="Enter Certificate ID" required />
+          </div>
+          <button id="revokeButton" type="submit" class="btn btn-danger btn-full" style="margin-top:4px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            Revoke Certificate
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Update Status -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="icon icon-blue">↺</div>
+        <div><h2>Update Student Status</h2><p>Change the enrollment status of a student.</p></div>
+      </div>
+      <form id="updateStatusForm">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="field-label">Student ID</label>
+            <input type="text" id="studentIdUpdate" placeholder="Enter Student ID" required />
+          </div>
+          <div class="form-group">
+            <label class="field-label">New Status</label>
+            <select id="newStatus" class="input" required>
+              <option value="">Select Status</option>
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="SUSPENDED">SUSPENDED</option>
+              <option value="GRADUATED">GRADUATED</option>
+              <option value="ON LEAVE">ON LEAVE</option>
+            </select>
+          </div>
+        </div>
+        <button id="updateStatusButton" type="submit" class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Update Status
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Message Area -->
+  <div id="messageArea" class="msg-area">
+    <span style="color:var(--text-muted)">Results will appear here.</span>
+  </div>
+</div>
+
+<script>
+  const get = id => document.getElementById(id);
+  const connectButton = get('connectButton'), walletStatus = get('walletStatus'), roleStatus = get('roleStatus');
+  const issueForm = get('issueForm'), verifyForm = get('verifyForm'), revokeForm = get('revokeForm'), updateStatusForm = get('updateStatusForm');
+  const messageArea = get('messageArea'), adminPanel = get('adminPanel');
+  const issueButton = get('issueButton'), verifyButton = get('verifyButton'), revokeButton = get('revokeButton'), updateStatusButton = get('updateStatusButton');
+
+  const contractAddress = "0xCEE8399631DEd9E4632Db6D4E8BA9bA499076e46";
+  const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"},{"indexed":true,"internalType":"address","name":"issuer","type":"address"}],"name":"CertificateIssued","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":true,"internalType":"address","name":"revoker","type":"address"}],"name":"CertificateRevoked","type":"event"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"},{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"issueCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"revokeCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"certificates","outputs":[{"internalType":"bytes32","name":"id","type":"bytes32"},{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"verifyCertificate","outputs":[{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"}];
+
+  let provider = null, signer = null, contract = null;
+
+  function toBytes32(s) { return ethers.utils.formatBytes32String(s); }
+  function showSpinner(btn, text) { btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> ${text}`; }
+  function hideSpinner(btn, text) { btn.disabled = false; btn.innerHTML = text; }
+
+  function showMessage(html, type = 'info') {
+    messageArea.className = `msg-area ${type}`;
+    messageArea.innerHTML = `<div style="width:100%;text-align:left">${html}</div>`;
+  }
+
+  async function switchToSepolia() {
+    try {
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0xaa36a7" }] });
+    } catch (e) {
+      if (e.code === 4902) {
+        await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: "0xaa36a7", chainName: "Sepolia", nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 }, rpcUrls: ["https://rpc.sepolia.org"], blockExplorerUrls: ["https://sepolia.etherscan.io"] }] });
+      }
+    }
+  }
+
+  async function checkUserRole() {
+    try {
+      const owner = await contract.owner();
+      const addr = await signer.getAddress();
+      if (owner.toLowerCase() === addr.toLowerCase()) {
+        roleStatus.className = 'role-badge owner';
+        roleStatus.textContent = '◆ Manager (Owner)';
+        adminPanel.style.display = 'block';
+      } else {
+        roleStatus.className = 'role-badge user';
+        roleStatus.textContent = '◇ Viewer';
+        adminPanel.style.display = 'none';
+      }
+    } catch(e) { roleStatus.textContent = ''; }
+  }
+
+  async function connectWallet() {
+    if (typeof window.ethereum === 'undefined') return showMessage('No web3 wallet found. Please install MetaMask.', 'error');
+    try {
+      provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+      await provider.send("eth_requestAccounts", []);
+      await switchToSepolia();
+      signer = provider.getSigner();
+      contract = new ethers.Contract(contractAddress, contractABI, signer);
+      const address = await signer.getAddress();
+      walletStatus.textContent = `${address.substring(0,6)}...${address.slice(-4)}`;
+      connectButton.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Connected`;
+      connectButton.disabled = true;
+      showMessage('Wallet connected.', 'success');
+      await checkUserRole();
+    } catch(e) { showMessage('Connection failed or denied.', 'error'); }
+  }
+
+  connectButton.addEventListener('click', connectWallet);
+  window.addEventListener('load', async () => { if (window.ethereum) { try { const accs = await window.ethereum.request({ method: 'eth_accounts' }); if (accs.length > 0) connectWallet(); } catch(e){} } });
+
+  issueForm && issueForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const certId = get('certificateIdIssue').value, ipfsHash = get('ipfsHashIssue').value;
+    if (!ipfsHash) return showMessage('Enter an IPFS hash.', 'error');
+    showSpinner(issueButton, 'Issuing…');
+    try {
+      const tx = await contract.issueCertificate(toBytes32(certId), ipfsHash);
+      showMessage(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View on Etherscan ↗</a>`, 'info');
+      await tx.wait();
+      showMessage(`<div class="badge badge-green" style="margin-bottom:8px">✓ Certificate Issued</div><br><strong>ID:</strong> ${certId}<br><strong>IPFS:</strong> ${ipfsHash}`, 'success');
+      try { await fetch('http://localhost:3000/api/students', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({certificateId:certId, ipfsCid:ipfsHash, issueDate:new Date().toISOString()}) }); } catch(err){}
+      issueForm.reset();
+    } catch(err) { showMessage(`Issue failed: ${err.reason || err.message}`, 'error'); }
+    finally { hideSpinner(issueButton, '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Issue Certificate'); }
+  });
+
+  verifyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const certId = get('certificateIdVerify').value;
+    showSpinner(verifyButton, 'Verifying…');
+    try {
+      if (!contract) {
+        provider = provider || ethers.getDefaultProvider('sepolia');
+        contract = new ethers.Contract(contractAddress, contractABI, provider);
+      }
+      const [ipfsHash, issueDate, isValid] = await contract.verifyCertificate(toBytes32(certId));
+      if (!isValid) {
+        showMessage(`<div class="badge badge-red" style="margin-bottom:8px">✕ Revoked</div><br>This certificate has been revoked and is no longer valid.`, 'error');
+      } else {
+        const issued = new Date(issueDate * 1000).toLocaleDateString('en-IN', {year:'numeric',month:'long',day:'numeric'});
+        const url = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+        const resultHtml = `
+          <div style="display:flex; flex-direction:column; gap:20px; align-items:center; width:100%">
+            <!-- Top Section: Status & Details -->
+            <div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center; align-items:center; width:100%; background:var(--bg-input); border-radius:12px; padding:20px; border:1px solid var(--green-glow);">
+              
+              <!-- Left side: Logo & Status -->
+              <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; border-right:1px solid var(--border); padding-right:20px;">
+                <svg width="60" height="60" viewBox="0 0 100 100" fill="none">
+                  <circle cx="50" cy="50" r="45" fill="#34d399" fill-opacity="0.2"/>
+                  <circle cx="50" cy="50" r="35" fill="#34d399" fill-opacity="0.5"/>
+                  <circle cx="50" cy="50" r="25" fill="#059669"/>
+                  <path d="M40 50L47 57L62 42" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <div class="badge badge-green" style="font-size:0.85rem;padding:6px 12px;">✓ CERTIFICATE VERIFIED</div>
+              </div>
+              
+              <!-- Right side: Details -->
+              <div style="flex:1; min-width:200px; text-align:left;">
+                <p style="margin:0 0 8px 0"><strong style="color:var(--text-secondary);font-size:0.85rem;text-transform:uppercase">Issued On</strong><br><span style="font-size:1.1rem;color:var(--text-primary)">${issued}</span></p>
+                <p style="margin:0;word-break:break-all"><strong style="color:var(--text-secondary);font-size:0.85rem;text-transform:uppercase">IPFS Hash</strong><br><span class="mono" style="font-size:0.9rem;color:var(--text-primary)">${ipfsHash}</span></p>
+              </div>
+            </div>
+
+            <!-- Buttons: Download & Verify Another -->
+            <div style="display:flex; flex-wrap:wrap; gap:12px; width:100%; justify-content:center;">
+              <a href="${url}" target="_blank" download class="btn btn-primary" style="flex:1; min-width:150px; max-width:250px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download PDF
+              </a>
+              <button type="button" onclick="document.getElementById('verifyForm').reset(); document.getElementById('messageArea').innerHTML='<span style=\\'color:var(--text-muted)\\'>Results will appear here.</span>'; document.getElementById('messageArea').className='msg-area';" class="btn btn-ghost" style="flex:1; min-width:150px; max-width:250px; border:1px solid var(--border);background:var(--bg-card);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                Verify Another
+              </button>
+            </div>
+
+            <!-- Document iframe -->
+            <div class="ipfs-result" style="width:100%; border-radius:12px; overflow:hidden; border:1px solid var(--border);">
+              <iframe src="${url}" title="Certificate" style="width:100%; height:500px; border:none; background:#fff;"></iframe>
+            </div>
+          </div>
+        `;
+        showMessage(resultHtml, 'success');
+      }
+    } catch(err) { showMessage(`Verification failed. ID may not exist or network error.<br><span style="font-size:0.8em;opacity:0.7">${err.reason || err.message}</span>`, 'error'); }
+    finally { hideSpinner(verifyButton, '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Verify Certificate'); }
+  });
+
+  revokeForm && revokeForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const certId = get('certificateIdRevoke').value;
+    showSpinner(revokeButton, 'Revoking…');
+    try {
+      const tx = await contract.revokeCertificate(toBytes32(certId));
+      showMessage(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View on Etherscan ↗</a>`, 'info');
+      await tx.wait();
+      showMessage(`Certificate <strong>${certId}</strong> has been revoked.`, 'success');
+      revokeForm.reset();
+    } catch(err) { showMessage(`Revoke failed: ${err.reason || err.message}`, 'error'); }
+    finally { hideSpinner(revokeButton, '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Revoke Certificate'); }
+  });
+
+  updateStatusForm && updateStatusForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const studentId = get('studentIdUpdate').value, newStatus = get('newStatus').value;
+    showSpinner(updateStatusButton, 'Updating…');
+    try {
+      const tx = await contract.updateStatus(toBytes32(studentId), newStatus);
+      showMessage(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View on Etherscan ↗</a>`, 'info');
+      await tx.wait();
+      showMessage(`Status updated — <strong>${studentId}</strong> is now <strong>${newStatus}</strong>.`, 'success');
+      updateStatusForm.reset();
+    } catch(err) { showMessage(`Status update failed: ${err.reason || err.message}`, 'error'); }
+    finally { hideSpinner(updateStatusButton, '↺ Update Status'); }
+  });
+
+  // Theme Switcher Logic
+  const savedTheme = localStorage.getItem('diacsTheme') || 'dark';
+  if (savedTheme !== 'dark') document.body.setAttribute('data-theme', savedTheme);
+  const themeBtns = document.querySelectorAll('.theme-btn');
+  themeBtns.forEach(btn => {
+    if(btn.dataset.theme === savedTheme) btn.classList.add('active');
+    else btn.classList.remove('active');
+    
+    btn.addEventListener('click', () => {
+      themeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (btn.dataset.theme === 'dark') document.body.removeAttribute('data-theme');
+      else document.body.setAttribute('data-theme', btn.dataset.theme);
+      localStorage.setItem('diacsTheme', btn.dataset.theme);
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CertChain — College Admin</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-brand" style="display:flex;align-items:center;gap:6px">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4" stroke="#34d399" stroke-width="3"/></svg>
+    DIACS Validator
+  </span>
+  <span class="chain-badge">Sepolia Testnet</span>
+  <div class="nav-links">
+    <a href="index.html" class="nav-link">Diacs Control <span style="color:var(--green);font-size:1.1em;vertical-align:middle">✓</span></a>
+    <a href="college.html" class="nav-link active">College Control</a>
+    <a href="manager.html" class="nav-link">Analytics & Logs</a>
+    <a href="public.html" class="nav-link">Public Verifier <span style="color:var(--green);font-size:1.1em;vertical-align:middle">✓</span></a>
+  </div>
+  <div class="theme-switch" id="themeSwitch">
+    <button class="theme-btn" data-theme="dark" title="Dark Mode">🌙</button>
+    <button class="theme-btn" data-theme="light" title="Light Mode">☀️</button>
+    <button class="theme-btn" data-theme="transparent" title="Transparent Mode">💧</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+  <div class="page-header">
+    <div class="logo-badge">College Admin Portal</div>
+    <h1>Issue &amp; Revoke Certificates</h1>
+    <p>Generate student metadata, pin to IPFS, and issue credentials on-chain. Owner wallet required.</p>
+  </div>
+
+  <!-- Wallet Bar -->
+  <div class="wallet-bar">
+    <button id="connectBtn" class="btn btn-primary btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+      Connect Wallet
+    </button>
+    <span id="walletStatus" class="wallet-status mono"></span>
+    <span id="role" class="role-badge"></span>
+  </div>
+
+  <div class="grid-2">
+    <!-- Issue Block -->
+    <div class="card">
+      <div class="card-header">
+        <div class="icon icon-green">✦</div>
+        <div>
+          <h2>Add Student &amp; Issue</h2>
+          <p>Fill details → Generate JSON → Pin → Issue.</p>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label">Student Name</label>
+        <input id="stuName" type="text" placeholder="Full name" />
+      </div>
+      <div class="form-group">
+        <label class="field-label">Date of Birth</label>
+        <input id="stuDob" type="date" />
+      </div>
+      <div class="form-group">
+        <label class="field-label">Status</label>
+        <select id="stuStatus" class="input">
+          <option value="ACTIVE">ACTIVE</option>
+          <option value="GRADUATED">GRADUATED</option>
+          <option value="SUSPENDED">SUSPENDED</option>
+          <option value="ON LEAVE">ON LEAVE</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="field-label">Roll Number</label>
+        <input id="stuRoll" type="text" placeholder="Roll No" />
+      </div>
+      <div class="form-group">
+        <label class="field-label">Certificate ID</label>
+        <div style="display:flex;gap:8px">
+          <input id="certId" type="text" placeholder="Unique Certificate ID" style="flex:1" />
+          <button id="autoGenBtn" class="btn btn-dark btn-sm" type="button">Auto-Generate</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label" style="display:flex;justify-content:space-between">Generated Metadata JSON <span style="font-size:0.75rem;font-weight:normal;color:var(--text-muted);text-transform:none">(Required standardized format for IPFS pinning)</span></label>
+        <textarea id="metadataJson" class="json-area" rows="6" placeholder="Metadata JSON will appear here…"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button id="genJsonBtn" class="btn btn-dark" style="flex:1">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          Generate JSON
+        </button>
+        <button id="copyJsonBtn" class="btn btn-ghost" style="flex:1">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy JSON
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label">IPFS CID (after pinning)</label>
+        <input id="ipfsCid" type="text" placeholder="Paste CID from Pinata / nft.storage" />
+      </div>
+
+      <button id="issueBtn" class="btn btn-success btn-full btn-lg">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Issue Certificate
+      </button>
+    </div>
+
+    <!-- Revoke + Tips -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="card">
+        <div class="card-header">
+          <div class="icon icon-red">✕</div>
+          <div>
+            <h2>Revoke Certificate</h2>
+            <p>Manager (owner) signature required.</p>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Certificate ID</label>
+          <input id="revokeCertId" type="text" placeholder="Certificate ID to revoke" />
+        </div>
+        <button id="revokeBtn" class="btn btn-danger btn-full btn-lg">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          Revoke Certificate
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="icon icon-violet">★</div>
+          <div><h2>Quick Guide</h2></div>
+        </div>
+        <ul class="tips-list">
+          <li data-n="1">
+            <div style="flex:1"><strong>Generate & Pin:</strong> Create the metadata JSON and pin it on IPFS to get the CID.</div>
+            <a href="https://www.google.com/search?q=How+to+pin+metadata+JSON+to+IPFS" target="_blank" class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:0.7rem;border-radius:4px;white-space:nowrap">Learn More ↗</a>
+          </li>
+          <li data-n="2">
+            <div style="flex:1"><strong>Issue on Blockchain:</strong> Paste the CID and issue. Note: Generating a certificate via MetaMask transaction costs ~0.00024429 Sepolia ETH on the testnet.</div>
+            <a href="https://www.google.com/search?q=Ethereum+smart+contract+gas+fees+for+issuing+certificates" target="_blank" class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:0.7rem;border-radius:4px;white-space:nowrap">Learn More ↗</a>
+          </li>
+          <li data-n="3">
+            <div style="flex:1"><strong>Funding & Execution:</strong> In a real-world scenario, costs should be funded by a collaboration between the Government and the College, while execution is handled by DIACS (you).</div>
+            <a href="https://www.google.com/search?q=Government+and+college+collaboration+for+blockchain+credentials" target="_blank" class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:0.7rem;border-radius:4px;white-space:nowrap">Learn More ↗</a>
+          </li>
+          <li data-n="4">
+            <div style="flex:1"><strong>Manager Only:</strong> Only the smart contract owner can issue or revoke credentials.</div>
+            <a href="https://www.google.com/search?q=Smart+contract+ownership+and+access+control" target="_blank" class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:0.7rem;border-radius:4px;white-space:nowrap">Learn More ↗</a>
+          </li>
+        </ul>
+      </div>
+
+      <div id="adminMsg" class="msg-area" style="min-height:48px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const contractAddress = "0xCEE8399631DEd9E4632Db6D4E8BA9bA499076e46";
+  const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"},{"indexed":true,"internalType":"address","name":"issuer","type":"address"}],"name":"CertificateIssued","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":true,"internalType":"address","name":"revoker","type":"address"}],"name":"CertificateRevoked","type":"event"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"},{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"issueCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"revokeCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"certificates","outputs":[{"internalType":"bytes32","name":"id","type":"bytes32"},{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"verifyCertificate","outputs":[{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"}];
+
+  const $ = id => document.getElementById(id);
+  let provider = null, signer = null, contract = null;
+
+  function toBytes32(s) { return ethers.utils.formatBytes32String(s); }
+  function showSpinner(btn, t) { btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> ${t}`; }
+  function hideSpinner(btn, t) { btn.disabled = false; btn.innerHTML = t; }
+  function setMsg(html, type='info') { const m=$('adminMsg'); m.className=`msg-area ${type}`; m.innerHTML=html; }
+
+  async function switchToSepolia() {
+    try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:"0xaa36a7"}] }); }
+    catch(e) { if(e.code===4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{chainId:"0xaa36a7",chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:["https://rpc.sepolia.org"],blockExplorerUrls:["https://sepolia.etherscan.io"]}] }); }
+  }
+
+  async function connectWallet() {
+    if (!window.ethereum) { $('walletStatus').textContent = "No wallet found."; return; }
+    provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+    try {
+      await provider.send("eth_requestAccounts", []);
+      await switchToSepolia();
+      signer = provider.getSigner();
+      const addr = await signer.getAddress();
+      $('walletStatus').textContent = `${addr.substring(0,6)}...${addr.slice(-4)}`;
+      contract = new ethers.Contract(contractAddress, contractABI, signer);
+      const owner = await contract.owner();
+      const role = $('role');
+      if (owner.toLowerCase() === addr.toLowerCase()) {
+        role.className='role-badge owner'; role.textContent='◆ Manager (Owner)';
+      } else {
+        role.className='role-badge user'; role.textContent='◇ Viewer Only';
+      }
+    } catch(e) { $('walletStatus').textContent = "Connection failed"; }
+  }
+
+  $('connectBtn').addEventListener('click', connectWallet);
+  window.addEventListener('load', async () => { 
+    if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} } 
+    const currentYear = new Date().getFullYear();
+    if (currentYear >= 2027) $('stuStatus').value = 'GRADUATED';
+    else $('stuStatus').value = 'ACTIVE';
+  });
+
+  $('genJsonBtn').addEventListener('click', () => {
+    const certId = $('certId').value.trim();
+    if (!certId) { alert("Provide Certificate ID"); return; }
+    const meta = { certificateId: certId, studentName: $('stuName').value.trim()||null, dateOfBirth: $('stuDob').value||null, status: $('stuStatus').value.trim()||null, rollNo: $('stuRoll').value.trim()||null, issuedBy: "College (fill actual college name before pinning)" };
+    $('metadataJson').value = JSON.stringify(meta, null, 2);
+  });
+
+  $('copyJsonBtn').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('metadataJson').value); alert("JSON copied! Now pin to IPFS and paste the CID below."); }
+    catch(e) { alert("Copy failed"); }
+  });
+
+  $('issueBtn').addEventListener('click', async () => {
+    const cid = $('ipfsCid').value.trim(), certId = $('certId').value.trim();
+    if (!cid) return alert("Paste IPFS CID after pinning.");
+    if (!certId) return alert("Provide Certificate ID.");
+    if (!contract) return alert("Connect your wallet first.");
+    showSpinner($('issueBtn'), 'Issuing…');
+    try {
+      const tx = await contract.issueCertificate(toBytes32(certId), cid);
+      setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View ↗</a>`, 'info');
+      await tx.wait();
+      setMsg(`<div class="badge badge-green">✓ Issued</div><br>Certificate ID: <strong>${certId}</strong>`, 'success');
+      try { await fetch('http://localhost:3000/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({certificateId:certId,studentName:$('stuName').value.trim(),dateOfBirth:$('stuDob').value,status:$('stuStatus').value.trim(),rollNo:$('stuRoll').value.trim(),ipfsCid:cid,issueDate:new Date().toISOString()}) }); } catch(err){}
+      ['certId','ipfsCid','metadataJson','stuName','stuDob','stuRoll'].forEach(id => { const el=$(''+id); if(el.tagName==='TEXTAREA'||el.type==='date') el.value=''; else el.value=''; });
+      const currentYear = new Date().getFullYear();
+      if (currentYear >= 2027) $('stuStatus').value = 'GRADUATED';
+      else $('stuStatus').value = 'ACTIVE';
+    } catch(err) { setMsg(`Issue failed: ${err.reason||err.message}`, 'error'); }
+    finally { hideSpinner($('issueBtn'), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Issue Certificate'); }
+  });
+
+  $('revokeBtn').addEventListener('click', async () => {
+    const id = $('revokeCertId').value.trim();
+    if (!id) return alert("Provide Certificate ID to revoke.");
+    if (!contract) return alert("Connect wallet.");
+    showSpinner($('revokeBtn'), 'Revoking…');
+    try {
+      const tx = await contract.revokeCertificate(toBytes32(id));
+      setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View ↗</a>`, 'info');
+      await tx.wait();
+      setMsg(`Certificate <strong>${id}</strong> revoked.`, 'success');
+      $('revokeCertId').value = '';
+    } catch(err) { setMsg(`Revoke failed: ${err.reason||err.message}`, 'error'); }
+    finally { hideSpinner($('revokeBtn'), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Revoke Certificate'); }
+  });
+
+  $('autoGenBtn').addEventListener('click', () => {
+    const year = new Date().getFullYear();
+    const randomHex = Math.random().toString(16).substring(2, 8).toUpperCase();
+    $('certId').value = `DIACS-${year}-${randomHex}`;
+  });
+
+  // Theme Switcher Logic
+  const savedTheme = localStorage.getItem('diacsTheme') || 'dark';
+  if (savedTheme !== 'dark') document.body.setAttribute('data-theme', savedTheme);
+  const themeBtns = document.querySelectorAll('.theme-btn');
+  themeBtns.forEach(btn => {
+    if(btn.dataset.theme === savedTheme) btn.classList.add('active');
+    else btn.classList.remove('active');
+    
+    btn.addEventListener('click', () => {
+      themeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (btn.dataset.theme === 'dark') document.body.removeAttribute('data-theme');
+      else document.body.setAttribute('data-theme', btn.dataset.theme);
+      localStorage.setItem('diacsTheme', btn.dataset.theme);
+    });
+  });
+</script>
+</body>
+</html>
