@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CertChain — Certificate Verification System</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script src="app-config.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -183,8 +184,11 @@
   const messageArea = get('messageArea'), adminPanel = get('adminPanel');
   const issueButton = get('issueButton'), verifyButton = get('verifyButton'), revokeButton = get('revokeButton'), updateStatusButton = get('updateStatusButton');
 
-  const contractAddress = "0xCEE8399631DEd9E4632Db6D4E8BA9bA499076e46";
-  const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"},{"indexed":true,"internalType":"address","name":"issuer","type":"address"}],"name":"CertificateIssued","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":true,"internalType":"address","name":"revoker","type":"address"}],"name":"CertificateRevoked","type":"event"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"},{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"issueCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"revokeCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"certificates","outputs":[{"internalType":"bytes32","name":"id","type":"bytes32"},{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"verifyCertificate","outputs":[{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"}];
+  const app = window.DIACS;
+  const appConfig = app.config;
+  const contractAddress = appConfig.contract.address;
+  const contractABI = appConfig.contract.abi;
+  const canUseChain = Boolean(contractAddress);
 
   let provider = null, signer = null, contract = null;
 
@@ -199,10 +203,10 @@
 
   async function switchToSepolia() {
     try {
-      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0xaa36a7" }] });
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: appConfig.sepoliaChainId }] });
     } catch (e) {
       if (e.code === 4902) {
-        await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: "0xaa36a7", chainName: "Sepolia", nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 }, rpcUrls: ["https://rpc.sepolia.org"], blockExplorerUrls: ["https://sepolia.etherscan.io"] }] });
+        await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: appConfig.sepoliaChainId, chainName: "Sepolia", nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 }, rpcUrls: [appConfig.sepoliaRpcUrl], blockExplorerUrls: [appConfig.blockExplorerUrl] }] });
       }
     }
   }
@@ -224,24 +228,44 @@
   }
 
   async function connectWallet() {
-    if (typeof window.ethereum === 'undefined') return showMessage('No web3 wallet found. Please install MetaMask.', 'error');
+    if (typeof window.ethereum === 'undefined') {
+      if (appConfig.demoMode) {
+        roleStatus.className = 'role-badge user';
+        roleStatus.textContent = '◇ Demo';
+        return showMessage('Wallet unavailable. Running in demo/local mode.', 'info');
+      }
+      return showMessage('No web3 wallet found. Please install MetaMask.', 'error');
+    }
     try {
       provider = new ethers.providers.Web3Provider(window.ethereum, "any");
       await provider.send("eth_requestAccounts", []);
       await switchToSepolia();
       signer = provider.getSigner();
-      contract = new ethers.Contract(contractAddress, contractABI, signer);
+      if (canUseChain) contract = new ethers.Contract(contractAddress, contractABI, signer);
       const address = await signer.getAddress();
       walletStatus.textContent = `${address.substring(0,6)}...${address.slice(-4)}`;
       connectButton.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Connected`;
       connectButton.disabled = true;
       showMessage('Wallet connected.', 'success');
-      await checkUserRole();
+      if (canUseChain) await checkUserRole();
+      else {
+        roleStatus.className = 'role-badge user';
+        roleStatus.textContent = '◇ Demo';
+        adminPanel.style.display = 'block';
+      }
     } catch(e) { showMessage('Connection failed or denied.', 'error'); }
   }
 
   connectButton.addEventListener('click', connectWallet);
-  window.addEventListener('load', async () => { if (window.ethereum) { try { const accs = await window.ethereum.request({ method: 'eth_accounts' }); if (accs.length > 0) connectWallet(); } catch(e){} } });
+  window.addEventListener('load', async () => {
+    const supportsStatus = contractABI.some((item) => item.type === 'function' && item.name === 'updateStatus');
+    if (!supportsStatus && updateStatusForm) {
+      const card = updateStatusForm.closest('.card');
+      if (card) card.style.display = 'none';
+    }
+    if (window.ethereum) { try { const accs = await window.ethereum.request({ method: 'eth_accounts' }); if (accs.length > 0) connectWallet(); } catch(e){} }
+    if (!canUseChain) showMessage('Contract is not configured. App is running in demo/local mode.', 'info');
+  });
 
   issueForm && issueForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -249,11 +273,15 @@
     if (!ipfsHash) return showMessage('Enter an IPFS hash.', 'error');
     showSpinner(issueButton, 'Issuing…');
     try {
-      const tx = await contract.issueCertificate(toBytes32(certId), ipfsHash);
-      showMessage(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View on Etherscan ↗</a>`, 'info');
-      await tx.wait();
+      if (canUseChain && contract) {
+        const tx = await contract.issueCertificate(toBytes32(certId), ipfsHash);
+        showMessage(`<span class="badge badge-blue">TX Sent</span> <a href="${app.explorerTxUrl(tx.hash)}" target="_blank">View on Etherscan ↗</a>`, 'info');
+        await tx.wait();
+      } else if (!appConfig.demoMode) {
+        throw new Error('Contract not configured. Set DIACS_CONFIG.contract.address.');
+      }
+      app.saveCertificateRecord(certId, { certificateId: certId, ipfsHash, issueDate: Math.floor(Date.now()/1000), isValid: true });
       showMessage(`<div class="badge badge-green" style="margin-bottom:8px">✓ Certificate Issued</div><br><strong>ID:</strong> ${certId}<br><strong>IPFS:</strong> ${ipfsHash}`, 'success');
-      try { await fetch('http://localhost:3000/api/students', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({certificateId:certId, ipfsCid:ipfsHash, issueDate:new Date().toISOString()}) }); } catch(err){}
       issueForm.reset();
     } catch(err) { showMessage(`Issue failed: ${err.reason || err.message}`, 'error'); }
     finally { hideSpinner(issueButton, '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Issue Certificate'); }
@@ -264,15 +292,25 @@
     const certId = get('certificateIdVerify').value;
     showSpinner(verifyButton, 'Verifying…');
     try {
-      if (!contract) {
+      if (canUseChain && !contract) {
         provider = provider || ethers.getDefaultProvider('sepolia');
         contract = new ethers.Contract(contractAddress, contractABI, provider);
       }
-      const [ipfsHash, issueDate, isValid] = await contract.verifyCertificate(toBytes32(certId));
+      let ipfsHash, issueDate, isValid;
+      if (canUseChain) {
+        [ipfsHash, issueDate, isValid] = await contract.verifyCertificate(toBytes32(certId));
+      } else {
+        const record = app.getCertificateRecord(certId);
+        if (!record) throw new Error('Certificate not found in demo/local store.');
+        ipfsHash = record.ipfsHash;
+        issueDate = record.issueDate;
+        isValid = Boolean(record.isValid);
+      }
       if (!isValid) {
         showMessage(`<div class="badge badge-red" style="margin-bottom:8px">✕ Revoked</div><br>This certificate has been revoked and is no longer valid.`, 'error');
       } else {
-        const issued = new Date(issueDate * 1000).toLocaleDateString('en-IN', {year:'numeric',month:'long',day:'numeric'});
+        const issuedTs = typeof issueDate === 'number' ? issueDate : Number(issueDate.toString());
+        const issued = new Date(issuedTs * 1000).toLocaleDateString('en-IN', {year:'numeric',month:'long',day:'numeric'});
         const url = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
         const resultHtml = `
           <div style="display:flex; flex-direction:column; gap:20px; align-items:center; width:100%">
@@ -326,9 +364,14 @@
     const certId = get('certificateIdRevoke').value;
     showSpinner(revokeButton, 'Revoking…');
     try {
-      const tx = await contract.revokeCertificate(toBytes32(certId));
-      showMessage(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View on Etherscan ↗</a>`, 'info');
-      await tx.wait();
+      if (canUseChain && contract) {
+        const tx = await contract.revokeCertificate(toBytes32(certId));
+        showMessage(`<span class="badge badge-blue">TX Sent</span> <a href="${app.explorerTxUrl(tx.hash)}" target="_blank">View on Etherscan ↗</a>`, 'info');
+        await tx.wait();
+      } else if (!appConfig.demoMode) {
+        throw new Error('Contract not configured. Set DIACS_CONFIG.contract.address.');
+      }
+      app.saveCertificateRecord(certId, { isValid: false, revokedAt: Math.floor(Date.now()/1000) });
       showMessage(`Certificate <strong>${certId}</strong> has been revoked.`, 'success');
       revokeForm.reset();
     } catch(err) { showMessage(`Revoke failed: ${err.reason || err.message}`, 'error'); }
@@ -338,6 +381,10 @@
   updateStatusForm && updateStatusForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const studentId = get('studentIdUpdate').value, newStatus = get('newStatus').value;
+    if (!contract || typeof contract.updateStatus !== 'function') {
+      showMessage('This contract does not support updateStatus. Use metadata updates + re-issuance flow.', 'error');
+      return;
+    }
     showSpinner(updateStatusButton, 'Updating…');
     try {
       const tx = await contract.updateStatus(toBytes32(studentId), newStatus);

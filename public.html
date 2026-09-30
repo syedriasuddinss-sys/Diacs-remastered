@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CertChain — Public Verification</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script src="app-config.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -85,19 +86,25 @@
 </div>
 
 <script>
-  const contractAddress = "0xCEE8399631DEd9E4632Db6D4E8BA9bA499076e46";
-  const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"},{"indexed":true,"internalType":"address","name":"issuer","type":"address"}],"name":"CertificateIssued","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":true,"internalType":"address","name":"revoker","type":"address"}],"name":"CertificateRevoked","type":"event"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"},{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"issueCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"revokeCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"certificates","outputs":[{"internalType":"bytes32","name":"id","type":"bytes32"},{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"verifyCertificate","outputs":[{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"}];
-
   const $ = id => document.getElementById(id);
+  const app = window.DIACS;
+  const appConfig = app.config;
+  const contractAddress = appConfig.contract.address;
+  const contractABI = appConfig.contract.abi;
+  const canUseChain = Boolean(contractAddress);
   let provider = null, signer = null, contract = null;
 
   function showSpinner(btn, t) { btn.disabled=true; btn.innerHTML=`<span class="spinner"></span> ${t}`; }
   function hideSpinner(btn, t) { btn.disabled=false; btn.innerHTML=t; }
   function setResult(html, type='info') { const r=$('result'); r.className=`msg-area ${type}`; r.innerHTML=html; }
+  function resetVerifier() {
+    $('certId').value = '';
+    setResult('<span style="color:var(--text-muted)">Enter a Certificate ID above to verify.</span>');
+  }
 
   async function switchToSepolia() {
-    try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:"0xaa36a7"}] }); }
-    catch(e) { if(e.code===4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{chainId:"0xaa36a7",chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:["https://rpc.sepolia.org"],blockExplorerUrls:["https://sepolia.etherscan.io"]}] }); }
+    try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:appConfig.sepoliaChainId}] }); }
+    catch(e) { if(e.code===4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{chainId:appConfig.sepoliaChainId,chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:[appConfig.sepoliaRpcUrl],blockExplorerUrls:[appConfig.blockExplorerUrl]}] }); else throw e; }
   }
 
   async function connectWallet() {
@@ -111,12 +118,42 @@
       const short = `${addr.substring(0,6)}...${addr.slice(-4)}`;
       $('walletLabel').textContent = `Connected: ${short}`;
       $('connectBtn').innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Connected`;
-      contract = new ethers.Contract(contractAddress, contractABI, signer);
+      if (canUseChain) contract = new ethers.Contract(contractAddress, contractABI, signer);
     } catch(err) { $('walletLabel').textContent = "Connection denied"; }
   }
 
+  function renderVerified(certificateId, ipfsHash, issueDate, sourceLabel, isDemoPayload) {
+    const issuedOn = new Date(Number(issueDate) * 1000).toLocaleDateString('en-IN', {year:'numeric',month:'long',day:'numeric'});
+    const ipfsUrl = app.ipfsUrl(ipfsHash);
+    const demoMeta = app.getIpfsPayload(ipfsHash);
+    setResult(`
+      <div style="display:flex; flex-direction:column; gap:20px; align-items:center; width:100%">
+        <div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center; align-items:center; width:100%; background:var(--bg-input); border-radius:12px; padding:20px; border:1px solid var(--green-glow);">
+          <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; border-right:1px solid var(--border); padding-right:20px;">
+            <svg width="60" height="60" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="45" fill="#34d399" fill-opacity="0.2"/><circle cx="50" cy="50" r="35" fill="#34d399" fill-opacity="0.5"/><circle cx="50" cy="50" r="25" fill="#059669"/><path d="M40 50L47 57L62 42" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="badge badge-green" style="font-size:0.85rem;padding:6px 12px;">✓ CERTIFICATE VERIFIED</div>
+          </div>
+          <div style="flex:1; min-width:200px; text-align:left;">
+            <p style="margin:0 0 8px 0"><strong style="color:var(--text-secondary);font-size:0.85rem;text-transform:uppercase">Issued On</strong><br><span style="font-size:1.1rem;color:var(--text-primary)">${issuedOn}</span></p>
+            <p style="margin:0 0 8px 0;word-break:break-all"><strong style="color:var(--text-secondary);font-size:0.85rem;text-transform:uppercase">IPFS Hash</strong><br><span class="mono" style="font-size:0.9rem;color:var(--text-primary)">${ipfsHash}</span></p>
+            <p style="margin:0"><strong style="color:var(--text-secondary);font-size:0.85rem;text-transform:uppercase">Source</strong><br><span>${sourceLabel}</span></p>
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:12px; width:100%; justify-content:center;">
+          <a href="${ipfsUrl}" target="_blank" class="btn btn-primary" style="flex:1; min-width:150px; max-width:250px;">Open IPFS Record</a>
+          <button type="button" id="verifyAnotherBtn" class="btn btn-ghost" style="flex:1; min-width:150px; max-width:250px; border:1px solid var(--border);background:var(--bg-card);">Verify Another</button>
+        </div>
+        ${isDemoPayload && demoMeta ? `<pre style="width:100%;text-align:left;max-height:260px;overflow:auto;background:var(--bg-input);padding:12px;border-radius:10px;border:1px solid var(--border)">${JSON.stringify(demoMeta, null, 2)}</pre>` : `<div class="ipfs-result" style="width:100%; border-radius:12px; overflow:hidden; border:1px solid var(--border);"><iframe src="${ipfsUrl}" title="Certificate" style="width:100%; height:500px; border:none; background:#fff;"></iframe></div>`}
+      </div>
+    `, 'success');
+    document.getElementById('verifyAnotherBtn').addEventListener('click', resetVerifier);
+  }
+
   $('connectBtn').addEventListener('click', connectWallet);
-  window.addEventListener('load', async () => { if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} } });
+  window.addEventListener('load', async () => {
+    if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} }
+    if (!canUseChain) $('walletLabel').textContent = appConfig.demoMode ? 'Demo mode active.' : 'Contract not configured.';
+  });
 
   $('verifyBtn').addEventListener('click', async () => {
     const id = $('certId').value.trim();
@@ -124,65 +161,29 @@
     if (id.length > 31) return setResult('Certificate ID too long (max 31 characters).', 'error');
 
     showSpinner($('verifyBtn'), 'Verifying…');
-    setResult('<span style="color:var(--text-muted)">Checking blockchain…</span>');
+    setResult('<span style="color:var(--text-muted)">Checking blockchain / local records…</span>');
 
     try {
-      if (!contract) {
-        provider = provider || ethers.getDefaultProvider('sepolia');
-        contract = new ethers.Contract(contractAddress, contractABI, provider);
+      if (canUseChain) {
+        if (!contract) {
+          provider = provider || ethers.getDefaultProvider('sepolia');
+          contract = new ethers.Contract(contractAddress, contractABI, provider);
+        }
+        const [ipfsHash, issueDate, isValid] = await contract.verifyCertificate(ethers.utils.formatBytes32String(id));
+        if (!isValid) return setResult(`<div class="badge badge-red" style="margin-bottom:10px">✕ Certificate Revoked</div>`, 'error');
+        app.saveCertificateRecord(id, { certificateId: id, ipfsHash, issueDate: Number(issueDate.toString()), isValid: true });
+        renderVerified(id, ipfsHash, Number(issueDate.toString()), 'Sepolia on-chain', false);
+        return;
       }
-      const formattedId = ethers.utils.formatBytes32String(id);
-      const [ipfsHash, issueDate, isValid] = await contract.verifyCertificate(formattedId);
+    } catch (_) {}
 
-      if (!isValid) {
-        setResult(`
-          <div class="badge badge-red" style="margin-bottom:10px">✕ Certificate Revoked</div>
-          <p style="color:var(--text-secondary);margin-top:8px">This certificate was found on-chain but has been revoked and is no longer valid.</p>
-        `, 'error');
-      } else {
-        const issuedOn = new Date(Number(issueDate.toString()) * 1000).toLocaleDateString('en-IN', {year:'numeric',month:'long',day:'numeric'});
-        const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-        setResult(`
-          <div style="display:flex; flex-direction:column; gap:20px; align-items:center; width:100%">
-            <div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center; align-items:center; width:100%; background:var(--bg-input); border-radius:12px; padding:20px; border:1px solid var(--green-glow);">
-              <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; border-right:1px solid var(--border); padding-right:20px;">
-                <svg width="60" height="60" viewBox="0 0 100 100" fill="none">
-                  <circle cx="50" cy="50" r="45" fill="#34d399" fill-opacity="0.2"/>
-                  <circle cx="50" cy="50" r="35" fill="#34d399" fill-opacity="0.5"/>
-                  <circle cx="50" cy="50" r="25" fill="#059669"/>
-                  <path d="M40 50L47 57L62 42" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <div class="badge badge-green" style="font-size:0.85rem;padding:6px 12px;">✓ CERTIFICATE VERIFIED</div>
-              </div>
-              <div style="flex:1; min-width:200px; text-align:left;">
-                <p style="margin:0 0 8px 0"><strong style="color:var(--text-secondary);font-size:0.85rem;text-transform:uppercase">Issued On</strong><br><span style="font-size:1.1rem;color:var(--text-primary)">${issuedOn}</span></p>
-                <p style="margin:0;word-break:break-all"><strong style="color:var(--text-secondary);font-size:0.85rem;text-transform:uppercase">IPFS Hash</strong><br><span class="mono" style="font-size:0.9rem;color:var(--text-primary)">${ipfsHash}</span></p>
-              </div>
-            </div>
-            <div style="display:flex; flex-wrap:wrap; gap:12px; width:100%; justify-content:center;">
-              <a href="${ipfsUrl}" target="_blank" download class="btn btn-primary" style="flex:1; min-width:150px; max-width:250px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download PDF
-              </a>
-              <button type="button" onclick="document.getElementById('certId').value=''; document.getElementById('messageArea').innerHTML='<span style=\\'color:var(--text-muted)\\'>Results will appear here.</span>'; document.getElementById('messageArea').className='msg-area';" class="btn btn-ghost" style="flex:1; min-width:150px; max-width:250px; border:1px solid var(--border);background:var(--bg-card);">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                Verify Another
-              </button>
-            </div>
-            <div class="ipfs-result" style="width:100%; border-radius:12px; overflow:hidden; border:1px solid var(--border);">
-              <iframe src="${ipfsUrl}" title="Certificate" style="width:100%; height:500px; border:none; background:#fff;"></iframe>
-            </div>
-          </div>
-        `, 'success');
-      }
-    } catch(err) {
-      setResult(`
-        <div class="badge badge-red" style="margin-bottom:8px">Verification Failed</div>
-        <p style="color:var(--text-secondary);margin-top:8px">The ID may not exist on-chain or a network error occurred.</p>
-        <p class="mono" style="font-size:0.76em;color:var(--text-muted);margin-top:6px">${err.reason||err.message}</p>
-      `, 'error');
-    } finally {
-      hideSpinner($('verifyBtn'), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Verify Certificate');
+    const localRecord = app.getCertificateRecord(id);
+    if (!localRecord) {
+      setResult(`<div class="badge badge-red" style="margin-bottom:8px">Verification Failed</div><p style="color:var(--text-secondary);margin-top:8px">Certificate ID not found on-chain and not present in demo store.</p>`, 'error');
+    } else if (!localRecord.isValid) {
+      setResult(`<div class="badge badge-red" style="margin-bottom:10px">✕ Certificate Revoked</div><p style="color:var(--text-secondary);margin-top:8px">This certificate exists in demo/local records but is marked revoked.</p>`, 'error');
+    } else {
+      renderVerified(id, localRecord.ipfsHash, localRecord.issueDate, 'Demo/local record', localRecord.ipfsHash.startsWith('demo-'));
     }
   });
 
