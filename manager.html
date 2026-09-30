@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CertChain — Analytics & Logs</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script src="app-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -158,8 +159,11 @@
 </div>
 
 <script>
-  const contractAddress = "0xCEE8399631DEd9E4632Db6D4E8BA9bA499076e46";
-  const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"},{"indexed":true,"internalType":"address","name":"issuer","type":"address"}],"name":"CertificateIssued","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":true,"internalType":"address","name":"revoker","type":"address"}],"name":"CertificateRevoked","type":"event"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"},{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"issueCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"revokeCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"verifyCertificate","outputs":[{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"}];
+  const app = window.DIACS;
+  const appConfig = app.config;
+  const contractAddress = appConfig.contract.address;
+  const contractABI = appConfig.contract.abi;
+  const canUseChain = Boolean(contractAddress);
 
   const $ = id => document.getElementById(id);
   let provider = null, signer = null, contract = null, listening = false;
@@ -171,8 +175,8 @@
   function hideSpinner(btn, t) { btn.disabled=false; btn.innerHTML=t; }
 
   async function switchToSepolia() {
-    try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:"0xaa36a7"}] }); }
-    catch(e) { if(e.code===4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{chainId:"0xaa36a7",chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:["https://rpc.sepolia.org"],blockExplorerUrls:["https://sepolia.etherscan.io"]}] }); }
+    try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:appConfig.sepoliaChainId}] }); }
+    catch(e) { if(e.code===4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{chainId:appConfig.sepoliaChainId,chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:[appConfig.sepoliaRpcUrl],blockExplorerUrls:[appConfig.blockExplorerUrl]}] }); }
   }
 
   async function showOwner() {
@@ -191,6 +195,7 @@
 
   async function connectWallet() {
     if (!window.ethereum) { $('walletLabel').textContent = "No wallet"; return; }
+    if (!canUseChain) { $('walletLabel').textContent = "Demo mode (contract not configured)"; return; }
     provider = new ethers.providers.Web3Provider(window.ethereum, "any");
     try {
       await provider.send("eth_requestAccounts", []);
@@ -204,9 +209,13 @@
   }
 
   $('connectBtn').addEventListener('click', connectWallet);
-  window.addEventListener('load', async () => { if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} } });
+  window.addEventListener('load', async () => {
+    if (!canUseChain) setMsg('Contract address not configured. Analytics require on-chain config.', 'info');
+    if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} }
+  });
 
   $('loadHistory').addEventListener('click', async () => {
+    if (!canUseChain) return setMsg('Configure contract address to load on-chain history.', 'error');
     const tb = $('eventsTable');
     tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:28px"><span class="spinner" style="border-top-color:var(--accent)"></span></td></tr>';
     try {
@@ -265,6 +274,7 @@
   });
 
   $('listenEvents').addEventListener('click', async () => {
+    if (!canUseChain) return setMsg('Configure contract address to listen for events.', 'error');
     if (!provider) provider = ethers.getDefaultProvider('sepolia');
     if (listening) return;
     listening = true;
@@ -310,6 +320,7 @@
   });
 
   $('revokeBtn').addEventListener('click', async () => {
+    if (!canUseChain) return setMsg('Configure contract address to revoke certificates.', 'error');
     const id = $('revokeId').value.trim();
     if (!id) return alert("Enter Certificate ID.");
     if (!contract) return alert("Connect wallet.");
@@ -325,6 +336,7 @@
   });
 
   $('transferBtn').addEventListener('click', async () => {
+    if (!canUseChain) return setMsg('Configure contract address to transfer ownership.', 'error');
     const addr = $('newOwner').value.trim();
     if (!ethers.utils.isAddress(addr)) return alert("Invalid address.");
     if (!contract) return alert("Connect wallet.");

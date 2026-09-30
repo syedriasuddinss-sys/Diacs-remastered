@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CertChain — College Admin</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script src="app-config.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -101,6 +102,22 @@
         </button>
       </div>
 
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button id="pinJsonBtn" class="btn btn-primary" style="flex:1;min-width:180px" type="button">
+          Pin Metadata JSON to IPFS
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label">Certificate File (optional)</label>
+        <input id="certFile" type="file" accept=".pdf,image/*" />
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button id="pinFileBtn" class="btn btn-ghost" style="flex:1;min-width:180px" type="button">Upload File to IPFS</button>
+        <input id="certFileCid" type="text" placeholder="File CID (auto-filled after upload)" style="flex:2;min-width:220px" />
+      </div>
+
       <div class="form-group">
         <label class="field-label">IPFS CID (after pinning)</label>
         <input id="ipfsCid" type="text" placeholder="Paste CID from Pinata / nft.storage" />
@@ -163,10 +180,12 @@
 </div>
 
 <script>
-  const contractAddress = "0xCEE8399631DEd9E4632Db6D4E8BA9bA499076e46";
-  const contractABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":false,"internalType":"string","name":"ipfsHash","type":"string"},{"indexed":true,"internalType":"address","name":"issuer","type":"address"}],"name":"CertificateIssued","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"certificateId","type":"bytes32"},{"indexed":true,"internalType":"address","name":"revoker","type":"address"}],"name":"CertificateRevoked","type":"event"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"},{"internalType":"string","name":"_ipfsHash","type":"string"}],"name":"issueCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"revokeCertificate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"certificates","outputs":[{"internalType":"bytes32","name":"id","type":"bytes32"},{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_certificateId","type":"bytes32"}],"name":"verifyCertificate","outputs":[{"internalType":"string","name":"ipfsHash","type":"string"},{"internalType":"uint256","name":"issueDate","type":"uint256"},{"internalType":"bool","name":"isValid","type":"bool"}],"stateMutability":"view","type":"function"}];
-
   const $ = id => document.getElementById(id);
+  const app = window.DIACS;
+  const appConfig = app.config;
+  const contractAddress = appConfig.contract.address;
+  const contractABI = appConfig.contract.abi;
+  const canUseChain = Boolean(contractAddress);
   let provider = null, signer = null, contract = null;
 
   function toBytes32(s) { return ethers.utils.formatBytes32String(s); }
@@ -174,13 +193,42 @@
   function hideSpinner(btn, t) { btn.disabled = false; btn.innerHTML = t; }
   function setMsg(html, type='info') { const m=$('adminMsg'); m.className=`msg-area ${type}`; m.innerHTML=html; }
 
+  function isValidCertId(certId) { return certId && certId.length <= 31; }
+
+  function buildMetadata() {
+    return {
+      certificateId: $('certId').value.trim() || null,
+      studentName: $('stuName').value.trim() || null,
+      dateOfBirth: $('stuDob').value || null,
+      status: $('stuStatus').value.trim() || null,
+      rollNo: $('stuRoll').value.trim() || null,
+      certificateFileCid: $('certFileCid').value.trim() || null,
+      issuedBy: "College (fill actual college name before pinning)"
+    };
+  }
+
   async function switchToSepolia() {
-    try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:"0xaa36a7"}] }); }
-    catch(e) { if(e.code===4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{chainId:"0xaa36a7",chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:["https://rpc.sepolia.org"],blockExplorerUrls:["https://sepolia.etherscan.io"]}] }); }
+    try {
+      await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:appConfig.sepoliaChainId}] });
+    } catch (e) {
+      if (e.code === 4902) {
+        await window.ethereum.request({
+          method:"wallet_addEthereumChain",
+          params:[{chainId:appConfig.sepoliaChainId,chainName:"Sepolia",nativeCurrency:{name:"Sepolia ETH",symbol:"ETH",decimals:18},rpcUrls:[appConfig.sepoliaRpcUrl],blockExplorerUrls:[appConfig.blockExplorerUrl]}]
+        });
+      } else {
+        throw e;
+      }
+    }
   }
 
   async function connectWallet() {
-    if (!window.ethereum) { $('walletStatus').textContent = "No wallet found."; return; }
+    if (!window.ethereum) {
+      $('walletStatus').textContent = appConfig.demoMode ? "Demo mode (no wallet)." : "No wallet found.";
+      $('role').className = 'role-badge user';
+      $('role').textContent = appConfig.demoMode ? '◇ Demo Issuer' : '';
+      return;
+    }
     provider = new ethers.providers.Web3Provider(window.ethereum, "any");
     try {
       await provider.send("eth_requestAccounts", []);
@@ -188,6 +236,11 @@
       signer = provider.getSigner();
       const addr = await signer.getAddress();
       $('walletStatus').textContent = `${addr.substring(0,6)}...${addr.slice(-4)}`;
+      if (!canUseChain) {
+        $('role').className='role-badge user';
+        $('role').textContent='◇ Demo Issuer';
+        return;
+      }
       contract = new ethers.Contract(contractAddress, contractABI, signer);
       const owner = await contract.owner();
       const role = $('role');
@@ -196,58 +249,112 @@
       } else {
         role.className='role-badge user'; role.textContent='◇ Viewer Only';
       }
-    } catch(e) { $('walletStatus').textContent = "Connection failed"; }
+    } catch(e) {
+      $('walletStatus').textContent = "Connection failed";
+      setMsg(`Wallet/network error: ${e.reason || e.message}`, 'error');
+    }
   }
 
   $('connectBtn').addEventListener('click', connectWallet);
-  window.addEventListener('load', async () => { 
-    if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} } 
+  window.addEventListener('load', async () => {
+    if (!canUseChain) setMsg('Contract address is not configured. Running in demo mode only.', 'info');
+    if(window.ethereum) { try { const a=await window.ethereum.request({method:'eth_accounts'}); if(a.length>0) connectWallet(); } catch(e){} }
     const currentYear = new Date().getFullYear();
-    if (currentYear >= 2027) $('stuStatus').value = 'GRADUATED';
-    else $('stuStatus').value = 'ACTIVE';
+    $('stuStatus').value = currentYear >= 2027 ? 'GRADUATED' : 'ACTIVE';
   });
 
   $('genJsonBtn').addEventListener('click', () => {
     const certId = $('certId').value.trim();
-    if (!certId) { alert("Provide Certificate ID"); return; }
-    const meta = { certificateId: certId, studentName: $('stuName').value.trim()||null, dateOfBirth: $('stuDob').value||null, status: $('stuStatus').value.trim()||null, rollNo: $('stuRoll').value.trim()||null, issuedBy: "College (fill actual college name before pinning)" };
-    $('metadataJson').value = JSON.stringify(meta, null, 2);
+    if (!isValidCertId(certId)) { alert("Provide a valid Certificate ID (1-31 chars)."); return; }
+    $('metadataJson').value = JSON.stringify(buildMetadata(), null, 2);
   });
 
   $('copyJsonBtn').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText($('metadataJson').value); alert("JSON copied! Now pin to IPFS and paste the CID below."); }
+    try { await navigator.clipboard.writeText($('metadataJson').value); alert("JSON copied."); }
     catch(e) { alert("Copy failed"); }
+  });
+
+  $('pinFileBtn').addEventListener('click', async () => {
+    const file = $('certFile').files[0];
+    if (!file) return setMsg('Choose a file first.', 'error');
+    showSpinner($('pinFileBtn'), 'Uploading…');
+    try {
+      const cid = await app.pinFile(file);
+      $('certFileCid').value = cid;
+      setMsg(`File pinned: <span class="mono">${cid}</span>`, 'success');
+    } catch (err) {
+      setMsg(err.message, 'error');
+    } finally {
+      hideSpinner($('pinFileBtn'), 'Upload File to IPFS');
+    }
+  });
+
+  $('pinJsonBtn').addEventListener('click', async () => {
+    let payload;
+    try {
+      payload = $('metadataJson').value.trim() ? JSON.parse($('metadataJson').value) : buildMetadata();
+    } catch (_) {
+      return setMsg('Metadata JSON is invalid.', 'error');
+    }
+    if (!payload.certificateId || !isValidCertId(payload.certificateId)) return setMsg('Metadata must include a valid certificateId (1-31 chars).', 'error');
+    showSpinner($('pinJsonBtn'), 'Pinning…');
+    try {
+      const cid = await app.pinJson(payload);
+      $('ipfsCid').value = cid;
+      app.saveIpfsPayload(cid, payload);
+      setMsg(`Metadata pinned: <span class="mono">${cid}</span>`, 'success');
+    } catch (err) {
+      setMsg(err.message, 'error');
+    } finally {
+      hideSpinner($('pinJsonBtn'), 'Pin Metadata JSON to IPFS');
+    }
   });
 
   $('issueBtn').addEventListener('click', async () => {
     const cid = $('ipfsCid').value.trim(), certId = $('certId').value.trim();
-    if (!cid) return alert("Paste IPFS CID after pinning.");
-    if (!certId) return alert("Provide Certificate ID.");
-    if (!contract) return alert("Connect your wallet first.");
+    if (!cid) return alert("Paste or pin a metadata CID first.");
+    if (!isValidCertId(certId)) return alert("Provide a valid Certificate ID (1-31 chars).");
     showSpinner($('issueBtn'), 'Issuing…');
     try {
-      const tx = await contract.issueCertificate(toBytes32(certId), cid);
-      setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View ↗</a>`, 'info');
-      await tx.wait();
+      if (canUseChain && contract) {
+        const tx = await contract.issueCertificate(toBytes32(certId), cid);
+        setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="${app.explorerTxUrl(tx.hash)}" target="_blank">View ↗</a>`, 'info');
+        await tx.wait();
+      } else if (!appConfig.demoMode) {
+        throw new Error('Connect owner wallet and configure contract to issue on Sepolia.');
+      }
+
+      app.saveCertificateRecord(certId, {
+        certificateId: certId,
+        ipfsHash: cid,
+        issueDate: Math.floor(Date.now() / 1000),
+        isValid: true
+      });
       setMsg(`<div class="badge badge-green">✓ Issued</div><br>Certificate ID: <strong>${certId}</strong>`, 'success');
-      try { await fetch('http://localhost:3000/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({certificateId:certId,studentName:$('stuName').value.trim(),dateOfBirth:$('stuDob').value,status:$('stuStatus').value.trim(),rollNo:$('stuRoll').value.trim(),ipfsCid:cid,issueDate:new Date().toISOString()}) }); } catch(err){}
-      ['certId','ipfsCid','metadataJson','stuName','stuDob','stuRoll'].forEach(id => { const el=$(''+id); if(el.tagName==='TEXTAREA'||el.type==='date') el.value=''; else el.value=''; });
+      ['certId','ipfsCid','metadataJson','stuName','stuDob','stuRoll','certFileCid'].forEach(id => $(''+id).value = '');
+      $('certFile').value = '';
       const currentYear = new Date().getFullYear();
-      if (currentYear >= 2027) $('stuStatus').value = 'GRADUATED';
-      else $('stuStatus').value = 'ACTIVE';
-    } catch(err) { setMsg(`Issue failed: ${err.reason||err.message}`, 'error'); }
-    finally { hideSpinner($('issueBtn'), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Issue Certificate'); }
+      $('stuStatus').value = currentYear >= 2027 ? 'GRADUATED' : 'ACTIVE';
+    } catch(err) {
+      setMsg(`Issue failed: ${err.reason||err.message}`, 'error');
+    } finally {
+      hideSpinner($('issueBtn'), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Issue Certificate');
+    }
   });
 
   $('revokeBtn').addEventListener('click', async () => {
     const id = $('revokeCertId').value.trim();
-    if (!id) return alert("Provide Certificate ID to revoke.");
-    if (!contract) return alert("Connect wallet.");
+    if (!isValidCertId(id)) return alert("Provide a valid Certificate ID to revoke.");
     showSpinner($('revokeBtn'), 'Revoking…');
     try {
-      const tx = await contract.revokeCertificate(toBytes32(id));
-      setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">View ↗</a>`, 'info');
-      await tx.wait();
+      if (canUseChain && contract) {
+        const tx = await contract.revokeCertificate(toBytes32(id));
+        setMsg(`<span class="badge badge-blue">TX Sent</span> <a href="${app.explorerTxUrl(tx.hash)}" target="_blank">View ↗</a>`, 'info');
+        await tx.wait();
+      } else if (!appConfig.demoMode) {
+        throw new Error('Connect owner wallet and configure contract to revoke on Sepolia.');
+      }
+      app.saveCertificateRecord(id, { isValid: false, revokedAt: Math.floor(Date.now() / 1000) });
       setMsg(`Certificate <strong>${id}</strong> revoked.`, 'success');
       $('revokeCertId').value = '';
     } catch(err) { setMsg(`Revoke failed: ${err.reason||err.message}`, 'error'); }
